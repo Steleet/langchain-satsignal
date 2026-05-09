@@ -1,0 +1,31 @@
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # enables OIDC trusted publishing if configured later
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+      - name: build sdist + wheel
+        run: python -m build
+      - name: verify wheel imports
+        run: |
+          pip install dist/*.whl
+          python -c "from langchain_satsignal import SatsignalCallbackHandler, SatsignalConfig, APIError, __version__; print('imports OK', __version__)"
+      - name: publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
