@@ -193,10 +193,13 @@ def _post(
     url: str, *, bearer: str, body: dict, timeout: float = 30.0,
     transport: Optional[Any] = None,
 ) -> dict:
+    # Lazy import to avoid circular at module load.
+    from . import __version__
     headers = {
         "Authorization": f"Bearer {bearer}",
         "Content-Type": "application/json",
         "Accept": "application/json",
+        "User-Agent": f"langchain-satsignal/{__version__}",
     }
     body_bytes = json.dumps(body, separators=(",", ":")).encode("utf-8")
     send = transport or _urllib_transport
