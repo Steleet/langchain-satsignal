@@ -1,0 +1,47 @@
+name: dogfood-anchor
+
+# Dogfood pattern: every push to main + every tag push anchors a small
+# JSON receipt describing the commit. The payload is deterministic per
+# (repo, sha, ref) — the Satsignal API's content-based dedup means
+# re-runs of the same workflow return the prior receipt without burning
+# new quota.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  anchor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build deterministic commit-metadata JSON
+        id: build
+        run: |
+          set -euo pipefail
+          jq -nc \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg sha "$GITHUB_SHA" \
+            --arg ref "$GITHUB_REF" \
+            --arg event "$GITHUB_EVENT_NAME" \
+            '{repo:$repo, sha:$sha, ref:$ref, event:$event}' \
+            > _dogfood.json
+          cat _dogfood.json
+          echo
+
+      - name: Anchor to Satsignal (dogfood-pushes)
+        id: anchor
+        uses: Steleet/satsignal-action@v0
+        with:
+          path: _dogfood.json
+          matter: dogfood-pushes
+          label: ${{ github.repository }}@${{ github.sha }}
+          api-key: ${{ secrets.SATSIGNAL_API_KEY }}
+
+      - name: Surface receipt
+        run: |
+          echo "::notice title=Satsignal receipt::txid=${{ steps.anchor.outputs.txid }} bundle=${{ steps.anchor.outputs.bundle_id }} url=${{ steps.anchor.outputs.receipt_url }}"
